@@ -1,0 +1,30 @@
+<?php
+
+class USSinNumberTestCase extends DrupalWebTestCase {
+  /**
+   * Implementation of getInfo()
+   *
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('US SIN test'),
+      'description' => t('Tests various valid and invalid US Social Insurance Number for validity'),
+      'group' => t('SIN')
+    );
+  }
+
+  public function testSinNumberUSValid() {
+    $this->assertTrue(valid_sin_number('us', '999-99-9999'), t('Test valid - 999-99-9999'));
+    $this->assertTrue(valid_sin_number('us', '999999999'), t('Test valid - 999999999'));
+  }
+
+  public function testSinNumberUSInvalid() {
+    $this->assertFalse(valid_sin_number('us', '3 72 06 28 151 045 34'), t('Test invalid - 3 72 06 28 151 045 34'));
+    $this->assertFalse(valid_sin_number('us', '1234'), t('Test invalid - '));
+    $this->assertFalse(valid_sin_number('us', '999999'), t('Test invalid - '));
+  }
+
+  public function testSinNumberUSFormatting() {
+    //$this->assertEqual(format_zipcode('us', '+6421123456', null), '+64 21 123 456', t('Check international mobile format'));
+  }
+}

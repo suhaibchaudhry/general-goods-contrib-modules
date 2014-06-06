@@ -1,0 +1,12 @@
+; $Id: sin.info,v 1.11 2010/09/02 16:05:55 thierrygd Exp $
+name = SIN - CCK
+description = "The sin module allows administrators to define a field type for Social Insurance Numbers."
+package = CCK
+dependencies[] = content
+core = 6.x
+; Information added by drupal.org packaging script on 2010-09-02
+version = "6.x-2.8"
+core = "6.x"
+project = "sin"
+datestamp = "1283443910"
+

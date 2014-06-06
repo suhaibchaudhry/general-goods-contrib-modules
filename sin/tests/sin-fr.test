@@ -1,0 +1,29 @@
+<?php
+
+class FRSinNumberTestCase extends DrupalWebTestCase {
+  /**
+   * Implementation of getInfo()
+   *
+   */
+  public static function getInfo() {
+    return array(
+      'name' => t('French SIN test'),
+      'description' => t('Tests various valid and invalid French Social Insurance Number for validity'),
+      'group' => t('SIN')
+    );
+  }
+
+  public function testSinNumberFRValid() {
+    $this->assertTrue(valid_sin_number('fr', '1 72 06 28 151 045 34'), t('Test valid - 1 72 06 28 151 045 34'));
+  }
+
+  public function testSinNumberFRInvalid() {
+    $this->assertFalse(valid_sin_number('fr', '3 72 06 28 151 045 34'), t('Test invalid - 3 72 06 28 151 045 34'));
+    $this->assertFalse(valid_sin_number('fr', '1234'), t('Test invalid - '));
+    $this->assertFalse(valid_sin_number('fr', '999999'), t('Test invalid - '));
+  }
+
+  public function testSinNumberFRFormatting() {
+    //$this->assertEqual(format_zipcode('fr', '+6421123456', null), '+64 21 123 456', t('Check international mobile format'));
+  }
+}
