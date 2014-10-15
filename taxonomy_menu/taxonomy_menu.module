@@ -294,7 +294,11 @@ function taxonomy_menu_taxonomy($op, $type, $args = NULL) {
 
         case 'update':
           //we have to pull from the args because using a taxonomy function pulls from the cache
-          $term->name = $args['name'];
+          if(!isset($term)) {
+		$term = new stdClass();	
+	  }
+
+	  $term->name = $args['name'];
           $term->description = $args['description'];
           $term->parents = $args['parent'];
           $term->weight = $args['weight'];
