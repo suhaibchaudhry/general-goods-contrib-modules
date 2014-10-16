@@ -132,6 +132,10 @@ function template_preprocess_content_display_overview_form(&$vars) {
         $row->{$child} = drupal_render($element[$child]);
       }
       else {
+	if(!isset($row->{$child})) {
+           $row->{$child} = new stdClass();
+     	}
+
         $row->{$child}->format = drupal_render($element[$child]['format']);
         $row->{$child}->exclude = drupal_render($element[$child]['exclude']);
       }
