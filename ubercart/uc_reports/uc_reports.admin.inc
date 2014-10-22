@@ -352,8 +352,15 @@ function uc_reports_products_custom() {
 
   if($args['customer']) {
     $cust_search = " AND n.nid IN (SELECT cp.nid FROM {uc_order_products} cp INNER JOIN {uc_orders} co ON cp.order_id = co.order_id INNER JOIN {users} cu ON cu.uid = co.uid WHERE cu.name LIKE '%%".db_escape_string($args['customer'])."%%') ";
+    $cust_ucp_search_base = " (SELECT cp.order_product_id FROM {uc_order_products} cp INNER JOIN {uc_orders} co ON cp.order_id = co.order_id INNER JOIN {users} cu ON cu.uid = co.uid WHERE cu.name LIKE '%%".db_escape_string($args['customer'])."%%') ";
+    $cust_ucp_search_p = " AND p.order_product_id IN ".$cust_ucp_search_base;
+    $cust_ucp_search_p2 = " AND p2.order_product_id IN ".$cust_ucp_search_base;
+    $cust_ucp_search_p3 = " AND p3.order_product_id IN ".$cust_ucp_search_base;
   } else {
     $cust_search = '';
+    $cust_ucp_search_p = '';
+    $cust_ucp_search_p2 = '';
+    $cust_ucp_search_p3 = '';
   }
 
   // Pull the order statuses into a SQL friendly array.
@@ -381,7 +388,7 @@ function uc_reports_products_custom() {
       case 'mysqli':
       case 'mysql':
         $sql = 
-        "SELECT n.nid, n.title, c.totalcount, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition) AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition) AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition) AS gross FROM {node} AS n LEFT JOIN {node_counter} AS c ON n.nid = c.nid
+        "SELECT n.nid, n.title, c.totalcount, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition ".$cust_ucp_search_p.") AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition ".$cust_ucp_search_p2.") AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition ".$cust_ucp_search_p3.") AS gross FROM {node} AS n LEFT JOIN {node_counter} AS c ON n.nid = c.nid
 
           WHERE type IN (". implode(", ", $product_types) .") ".$sql_search.$cust_search." GROUP BY n.nid DESC";
         break;
@@ -404,7 +411,7 @@ function uc_reports_products_custom() {
     switch ($GLOBALS['db_type']) {
       case 'mysqli':
       case 'mysql':
-        $sql = "SELECT n.nid, n.title, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition) AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition) AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition) AS gross FROM {node} AS n WHERE type IN (". implode(', ', $product_types).') '.$sql_search.$cust_search.' GROUP BY n.nid DESC';
+        $sql = "SELECT n.nid, n.title, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition ".$cust_ucp_search_p.") AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition ".$cust_ucp_search_p2.") AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition ".$cust_ucp_search_p3.") AS gross FROM {node} AS n WHERE type IN (". implode(', ', $product_types).') '.$sql_search.$cust_search.' GROUP BY n.nid DESC';
         break;
       case 'pgsql':
         $sql = "SELECT n.nid, n.title, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition) AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition) AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition) AS gross FROM {node} AS n WHERE type IN (". implode(', ', $product_types) .') GROUP BY n.nid, n.title';
