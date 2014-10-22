@@ -523,19 +523,24 @@ function uc_reports_products_custom_form(&$form_state, $values, $statuses) {
     '#collapsed' => TRUE,
   );
 
+  $parts = explode('|', arg(8));
+
   $form['search']['carton_barcode'] = array(
     '#type' => 'textfield',
-    '#title' => t('Carton Barcode')
+    '#title' => t('Carton Barcode'),
+    '#default_value' => $parts[0]
   );
 
   $form['search']['product_title'] = array(
     '#type' => 'textfield',
-    '#title' => t('Product Name')
+    '#title' => t('Product Name'),
+    '#default_value' => $parts[1]
   );
 
   $form['search']['customer_account'] = array(
     '#type' => 'textfield',
-    '#title' => t('Account #')
+    '#title' => t('Account #'),
+    '#default_value' => $parts[2]
   );
 
   $form['search']['start_date'] = array(
