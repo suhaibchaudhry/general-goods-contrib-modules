@@ -346,13 +346,13 @@ function uc_reports_products_custom() {
   }
 
   if($args['title']) {
-    $sql_search = " AND n.title LIKE '%%".db_escape_string($args['title'])."%%' ";
+    $sql_search = " AND LOWER(n.title) LIKE LOWER('%%".db_escape_string($args['title'])."%%') ";
   } else {
     $sql_search = '';
   }
 
   if($args['model']) {
-    $model_search = " AND ucp.model LIKE '".db_escape_string($args['model'])."%%' ";
+    $model_search = " AND LOWER(ucp.model) LIKE LOWER('".db_escape_string($args['model'])."%%') ";
     $model_join = " LEFT JOIN {uc_products} ucp ON n.nid = ucp.nid ";
   } else {
     $model_search = '';
@@ -360,8 +360,8 @@ function uc_reports_products_custom() {
   }
 
   if($args['customer']) {
-    $cust_search = " AND n.nid IN (SELECT cp.nid FROM {uc_order_products} cp INNER JOIN {uc_orders} co ON cp.order_id = co.order_id INNER JOIN {users} cu ON cu.uid = co.uid WHERE cu.name LIKE '".db_escape_string($args['customer'])."%%') ";
-    $cust_ucp_search_base = " (SELECT cp.order_product_id FROM {uc_order_products} cp INNER JOIN {uc_orders} co ON cp.order_id = co.order_id INNER JOIN {users} cu ON cu.uid = co.uid WHERE cu.name LIKE '".db_escape_string($args['customer'])."%%') ";
+    $cust_search = " AND n.nid IN (SELECT cp.nid FROM {uc_order_products} cp INNER JOIN {uc_orders} co ON cp.order_id = co.order_id INNER JOIN {users} cu ON cu.uid = co.uid WHERE LOWER(cu.name) LIKE LOWER('".db_escape_string($args['customer'])."%%')) ";
+    $cust_ucp_search_base = " (SELECT cp.order_product_id FROM {uc_order_products} cp INNER JOIN {uc_orders} co ON cp.order_id = co.order_id INNER JOIN {users} cu ON cu.uid = co.uid WHERE LOWER(cu.name) LIKE LOWER('".db_escape_string($args['customer'])."%%')) ";
     $cust_ucp_search_p = " AND p.order_product_id IN ".$cust_ucp_search_base;
     $cust_ucp_search_p2 = " AND p2.order_product_id IN ".$cust_ucp_search_base;
     $cust_ucp_search_p3 = " AND p3.order_product_id IN ".$cust_ucp_search_base;
