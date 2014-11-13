@@ -1,0 +1,327 @@
+<?php
+
+/**
+ * @file
+ * Let users save their favorite order
+ *
+ * @todo Improve documentation
+ */
+
+/**
+ * Implements hook_perm().
+ */
+function uc_favorder_perm() {
+  return array(
+    'create uc_favorder',
+    'administer uc_favorder',
+  );
+}
+
+/**
+ * Implementats hook_menu().
+ * Add a TAB to the user page
+ * Show the user favorite order
+ */
+function uc_favorder_menu() {
+  $items['uc_favorder/%/autocomplete'] = array(
+    'title' => 'Favorite Order',
+    'access callback' => 'uc_favorder_access',
+    'page callback' => 'uc_favorder_autocomplete',
+    'page arguments' => array(1),
+    'type' => MENU_CALLBACK,
+    'file' => 'uc_favorder.pages.inc',
+    'description' => "Autocomplete for favorite orders",
+  );
+  $items['user/%/favorite_order'] = array(
+    'title' => 'Favorite Order',
+    'access callback' => 'uc_favorder_access',
+    'access arguments' => array(1),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('uc_favorder_show_favorite_order', 1),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'uc_favorder.pages.inc',
+    'description' => "Show user's favorite order",
+  );
+  return $items;
+}
+
+/**
+ * Menu access callback.
+ */
+function uc_favorder_access($uid = NULL) {
+  global $user;
+  // If current user or if administrator
+  switch (TRUE) {
+    case user_is_logged_in() && $uid == $user->uid && user_access('create uc_favorder'):
+    case user_is_logged_in() && user_access('administer uc_favorder');
+      return TRUE;
+  }
+  return FALSE;
+}
+
+/*function uc_favorder_cart_pane($items) {
+  $panes = array();
+  if (user_is_logged_in()) {
+    $panes[] = array(
+      'id' => 'uc_favorder_form',
+      'title' => t('Save as favorite order'),
+      'enabled' => TRUE,
+      'weight' => 1,
+      'body' => !is_null($items) ? drupal_get_form('uc_favorder_save_cart_order', $items) : '',
+    );
+  }
+  return $panes;
+}*/
+
+/**
+ * Implements hook_form_form-id_alter()
+ * Add the update and save as favorite button
+ */
+function uc_favorder_form_uc_cart_view_form_alter(&$form, &$form_state)  {
+  global $user;
+  if (user_is_logged_in() && user_access('create uc_favorder')) {
+    // Only add to logged in users
+    $form['favorder_name'] = array(
+      '#title' => t('Favorite order name'),
+      '#type' => 'textfield',
+      '#autocomplete_path' => 'uc_favorder/' . $user->uid . '/autocomplete',
+      '#weight' => 1,
+    );
+    $form['favorder_submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Update and save as favorite'),
+      '#submit' => array(0 => 'uc_favorder_save_order_submit'),
+      '#validate' => array(0 => 'uc_favorder_save_order_validate'),
+      '#weight' => 2,
+    );
+  }
+}
+
+
+/**
+ * Form validate handler uc_favorder_form_uc_cart_view_form_alter()
+ */
+function uc_favorder_save_order_validate($form, &$form_state) {
+  if(empty($form_state['values']['favorder_name'])) form_set_error('favorder_name', t('You must set a name for your favorite order'));
+}
+
+/**
+ * Form submit handler uc_favorder_form_uc_cart_view_form_alter()
+ * Run cart update and save favorite order
+ */
+function uc_favorder_save_order_submit($form, &$form_state) {
+  global $user;
+  // Change OP to "Update cart" and run uc_cart_view_form_submit
+  $form_state['values']['op'] = t('Update cart');
+  uc_cart_view_form_submit($form, $form_state);
+
+  $items = uc_cart_get_contents();
+  $count = count($items);
+
+  // Check if user has favorite Order
+  $order = db_fetch_object(db_query("SELECT order_id, uid, name, created, modified FROM {uc_favorder} WHERE LOWER(name) LIKE LOWER('%s%%')", $form_state['values']['favorder_name']));
+
+  // Check if there is something to save
+  if ($count) {
+
+    // If user has existing favorite Order with the given name
+    // update order's info
+    // else save new favorite Order
+    if ($order) {
+      // Update order info
+      $order->modified = time();
+      drupal_write_record('uc_favorder', $order, 'order_id');
+      // Delete current items
+      db_query("DELETE FROM {uc_favorder_products} WHERE order_id = '%d'", $order->order_id);
+    }
+    else {
+      // Create order
+      $order = new stdClass();
+      $order->uid = $user->uid;
+      $order->name = $form_state['values']['favorder_name'];
+      $order->created = $order->modified = time();
+      drupal_write_record('uc_favorder', $order);
+    }
+    // add items to the order
+    foreach ($items as $item) {
+      $item->order_id = $order->order_id;
+      drupal_write_record('uc_favorder_products', $item);
+    }
+    drupal_set_message(t('Your favorite order <em>@order</em> has been saved.', array('@order' => $order->name)));
+  }
+  else{
+    // Delete previous order
+    if ($order) {
+      _uc_favorder_delete($order->order_id);
+      drupal_set_message(t('Your cart was empty, the favorite order %order has been deleted.', array('%order' => $order->name)), 'notice');
+    }
+    else {
+      drupal_set_message(t('Your cart was empty, no favorite order was created.'), 'notice');
+    }
+  }
+
+}
+
+// Helper to delete an order
+function _uc_favorder_delete($order_id) {
+  db_query("DELETE FROM {uc_favorder_products} WHERE order_id = '%d'", $order_id);
+  db_query("DELETE FROM {uc_favorder} WHERE order_id = '%d'", $order_id);
+}
+
+/**
+ * Implements hook_block().
+ * Create load order block
+ */
+function uc_favorder_block($op = 'list', $delta = 0, $edit = array()) {
+  switch ($op) {
+    case 'list':
+      $blocks[0]['info'] = t('Load favorite order');
+      $blocks[0]['cache'] = BLOCK_CACHE_PER_USER;
+      $blocks[0]['pages'] = "user/*/favorite_order\nuser/*/favorite_order/*";
+      return $blocks;
+
+    case 'view':
+      if (user_is_logged_in() && user_access('create uc_favorder')) {
+        global $user;
+
+        $orders = array();
+        $result = db_query("SELECT order_id, name FROM {uc_favorder} WHERE uid = '%d'", $user->uid);
+        while ($order = db_fetch_object($result)) {
+          $orders[$order->order_id] = $order->name;
+        }
+
+        if (!empty($orders)) {
+          $form = drupal_get_form('uc_favorder_load_favorder', NULL, $orders);
+        }
+
+        if (isset($form)) {
+          $block['content'] = $form;
+          $block['content'] .= l(t('Manage your favorite orders'), 'user/' . $user->uid . '/favorite_order');
+        }
+        else {
+          $block['content'] = '<p>' . t('Sorry, you have no favorite orders at this time. To create one, start by adding products to your !cart.', array('!cart' => l('shopping cart', 'cart'))) . '</p>';
+        }
+        return $block;
+      }
+  }
+}
+
+/**
+ * Define favorite Order load form
+ *
+ * @param $form_state
+ *
+ * @param $uid
+ *   (optional) User id that will be used to get the favorite order for.
+ * @param $orders
+ *   (optional) An associative array of orders to list for the user to chose
+ *   from.
+ */
+function uc_favorder_load_favorder(&$form_state, $uid = NULL, $orders = NULL) {
+  // Make sure we have a valid $uid
+  if ($uid == 0 || !user_load(array('uid' => $uid))) {
+    global $user;
+    $uid = $user->uid;
+  }
+
+  if (!$orders) {
+    $orders = array();
+    $result = db_query("SELECT order_id, name FROM {uc_favorder} WHERE uid = '%d'", $uid);
+    while ($order = db_fetch_object($result)) {
+      $orders[$order->order_id] = $order->name;
+    }
+  }
+
+  $form = array();
+  if (!empty($orders)) {
+    $form['uid'] = array(
+      '#type' => 'hidden',
+      '#value' => $uid,
+    );
+    $form['order_id'] = array(
+      '#prefix' => '<div class="favorder-select favorder-count-' . count($orders) . '">',
+      '#suffix' => '</div>',
+      '#type' => 'select',
+      '#title' => t("Favorite order"),
+      '#options' => $orders,
+      '#description' => t("Select the order you want to load."),
+    );
+    $form['clear'] = array(
+      '#type' => 'checkbox',
+      '#title' => t("Clear cart's content"),
+      '#description' => t("Clear your cart's content before adding your favorite order."),
+    );
+    $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Load favorite order'),
+    );
+    $form['#redirect'] = 'cart';
+  }
+  return $form;
+}
+
+/**
+ * Form submit handler uc_favorder_load_favorder()
+ * Load a favorite order on to the cart
+ */
+function uc_favorder_load_favorder_submit($form, &$form_state) {
+  // Check if we want to clear cart's content
+  if ($form_state['values']['clear']) {
+    uc_cart_empty(uc_cart_get_id());
+    drupal_set_message(t('Your cart has been emptied'));
+  }
+
+  $items = uc_favorder_get_order($form_state['values']['order_id']);
+  // Add each product to the cart. Do not rebuild cache
+  foreach ($items as $item) {
+    uc_cart_add_item($item->nid, $item->qty, $item->data, NULL, FALSE, FALSE, FALSE);
+  }
+  // rebuild cart cache
+  uc_cart_get_contents(NULL, 'rebuild');
+  drupal_set_message(t('Your favorite order %order has been added to your shopping cart.', array('%order' => $form['order_id']['#options'][$form_state['values']['order_id']])));
+}
+
+/**
+ * Get products in Favorite Order
+ *
+ * @param $order_id
+ *   Order id to load
+ *
+ * @return
+ *   array with products as return by uc_cart_get_contents()
+ *
+ * @see uc_cart_get_contents()
+ */
+function uc_favorder_get_order($order_id) {
+  $result = db_query("SELECT uc.nid, uc.qty, uc.data, n.title, n.vid FROM {node} n INNER JOIN {uc_favorder_products} uc ON n.nid = uc.nid WHERE uc.order_id = '%d'", $order_id);
+  $items = array();
+  while ($item = db_fetch_object($result)) {
+    for ($i = 0; $i < count($items); $i++) {
+      if ($items[$i]->nid == $item->nid && $items[$i]->data == $item->data) {
+        $items[$i]->qty += $item->qty;
+        continue 2;
+      }
+    }
+    $product = node_load($item->nid);
+    $item->cost = $product->cost;
+    $item->price = $product->sell_price;
+    $item->weight = $product->weight;
+    $item->data = unserialize($item->data);
+    $item->module = $item->data['module'];
+    $item->model = $product->model;
+
+    // Invoke hook_cart_item() with $op = 'load' in enabled modules.
+    foreach (module_list() as $module) {
+      $func = $module .'_cart_item';
+      if (function_exists($func)) {
+        // $item must be passed by reference.
+        $func('load', $item);
+      }
+    }
+    $items[] = $item;
+  }
+
+  // Allow other modules a chance to alter the fully loaded cart object.
+  drupal_alter('uc_cart', $items);
+  return $items;
+}

@@ -1,0 +1,12 @@
+name = Favorite Order
+description = Create favorite orders for clients
+core = 6.x
+package = Ubercart - extra
+
+dependencies[] = uc_cart
+; Information added by drupal.org packaging script on 2011-06-23
+version = "6.x-2.1"
+core = "6.x"
+project = "uc_favorder"
+datestamp = "1308840719"
+

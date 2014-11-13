@@ -1,0 +1,235 @@
+<?php
+
+/**
+ * @file
+ * Let users save their favorderite order
+ *
+ */
+
+
+/**
+ * Implements hook_install().
+ */
+
+function uc_favorder_install() {
+  drupal_install_schema('uc_favorder');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+
+function uc_favorder_uninstall() {
+  drupal_uninstall_schema('uc_favorder');
+}
+
+/**
+ * Implements hook_schema().
+ */
+
+function uc_favorder_schema() {
+
+  $schema['uc_favorder'] = array(
+    'description' => 'Stores Ubercart order information.',
+    'fields' => array(
+      'order_id' => array(
+        'description' => 'Primary key: the order ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'The {user}.uid of the customer that placed the order.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'description' => 'The name the user gives to this order.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp indicating when the order was created.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'modified' => array(
+        'description' => 'The Unix timestamp indicating when the order was last modified.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'indexes' => array(
+      'uid' => array('uid'),
+    ),
+    'primary key' => array('order_id'),
+  );
+  $schema['uc_favorder_products'] = array(
+    'description' => 'The products that have been ordered.',
+    'fields' => array(
+      'order_product_id' => array(
+        'description' => 'Primary key: the ordered product ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'order_id' => array(
+        'description' => 'The {uc_favorders}.order_id.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'nid' => array(
+        'description' => 'The {node}.nid of the product.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'qty' => array(
+        'description' => 'The number of the same product ordered.',
+        'type' => 'int',
+        'size' => 'small',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'data' => array(
+        'description' => 'A serialized array of extra data.',
+        'type' => 'text',
+        'serialize' => TRUE,
+      ),
+    ),
+    'indexes' => array(
+      'order_id' => array('order_id'),
+    ),
+    'primary key' => array('order_product_id'),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function uc_favorder_update_6200() {
+  $ret = array();
+  // Add new fields and modify existing ones
+  db_drop_primary_key($ret, 'uc_favorder', 'uid');
+
+  $order_id = array(
+    'description' => 'Primary key: the order ID.',
+    'type' => 'serial',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+  );
+  db_add_field($ret, 'uc_favorder', 'order_id', $order_id, array('primary key' => array('order_id')));
+
+  $name = array(
+    'description' => 'The name the user gives to this order.',
+    'type' => 'varchar',
+    'length' => 255,
+    'not null' => TRUE,
+    'default' => '',
+  );
+  db_add_field($ret, 'uc_favorder', 'name', $name);
+
+  $created = array(
+    'description' => 'The Unix timestamp indicating when the order was created.',
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+  );
+  db_add_field($ret, 'uc_favorder', 'created', $created);
+
+  $modified = array(
+    'description' => 'The Unix timestamp indicating when the order was last modified.',
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+  );
+  db_add_field($ret, 'uc_favorder', 'modified', $modified);
+
+  $uid = array(
+    'description' => 'The {user}.uid of the customer that placed the order.',
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0,
+  );
+  db_change_field($ret, 'uc_favorder', 'uid', 'uid', $uid, array('indexes' => array('uid' => array('uid'))));
+
+  // Create table for products
+  $uc_favorder_products = array(
+    'description' => 'The products that have been ordered.',
+    'fields' => array(
+      'order_product_id' => array(
+        'description' => 'Primary key: the ordered product ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'order_id' => array(
+        'description' => 'The {uc_favorders}.order_id.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'nid' => array(
+        'description' => 'The {node}.nid of the product.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'qty' => array(
+        'description' => 'The number of the same product ordered.',
+        'type' => 'int',
+        'size' => 'small',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'data' => array(
+        'description' => 'A serialized array of extra data.',
+        'type' => 'text',
+        'serialize' => TRUE,
+      ),
+    ),
+    'indexes' => array(
+      'order_id' => array('order_id'),
+    ),
+    'primary key' => array('order_product_id'),
+  );
+  db_create_table($ret, 'uc_favorder_products', $uc_favorder_products);
+
+  // Rewrite data to new fields
+  $results = db_query('SELECT uid, order_id, favorder_array FROM {uc_favorder}');
+  while($order = db_fetch_array($results)) {
+    $products = unserialize($order['favorder_array']);
+    foreach($products as $product) {
+      $new_product = array();
+      $new_product['order_id'] = $order['order_id'];
+      $new_product['nid'] = $product['nid'];
+      $new_product['qty'] = $product['qty'];
+      $new_product['data'] = $product['data'];
+      db_query("INSERT INTO {uc_favorder_products} (order_id, nid, qty, data) VALUES('%d', '%d', '%d', '%s')", $new_product);
+    }
+    $new_order = array();
+    $new_order['name'] = 'My first favorite order';
+    $new_order['created'] = $new_order['modified'] = time();
+    $new_order['order_id'] = $order['order_id'];
+    db_query("UPDATE {uc_favorder} SET name = '%s', created = '%d', modified = '%d' WHERE order_id = '%d'", $new_order);
+  }
+
+  // Remove not needed fields
+  db_drop_field($ret, 'uc_favorder', 'favorder_array');
+  return $ret;
+}

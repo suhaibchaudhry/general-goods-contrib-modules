@@ -1,0 +1,65 @@
+Favorite Order 6.x-2.0, 2011-03-29
+----------------------
+BUG FIXES:
+ - Module permissions in place [#1197568]
+    create uc_favorder
+    administer uc_favorder
+ - Anonymous users are not allowed to cerate a fav_order no matter what.
+
+Favorite Order 6.x-2.0, 2011-03-29
+----------------------
+- New classes to the order select form, allows for better theming
+- New classes to the order select form, allows for better theming
+BUG FIXES:
+- Whe user has no orders, the block no longer will show the
+  form to select one.
+
+Favorite Order 6.x-2.0-BETA2, 2011-03-21
+----------------------
+BUG FIXES:
+- Remove a forgotten dpm()
+
+Favorite Order 6.x-2.0-BETA1, 2011-03-21
+----------------------
+- This a bit of a backport form the 7.x-1.0-BETA1 branch with some improvements
+NEW FEATURES:
+- New DB schema
+- Multiple favorite orders per user
+- Favorite order data now saved from uc_cart_get_contents() and not form $form_state
+- Update cart before saving by invoking hook_cart_item() with $op = 'load'.
+- Allow other modules a chance to alter order by invoking drupal_alter('uc_cart', $items);
+BUG FIXES:
+- Remove second parameter in drupal_get_form() for "Load favorite order" block
+
+Favorite Order 6.x-1.1, 2011-03-17
+----------------------
+BUG FIXES:
+- Typo: Your favorite has been saved => Your favorite order has been saved
+- Fix "Warning: Call-time pass-by-reference" on uc_cart_view_form_submit()
+
+Favorite Order 6.x-1.0, 2010-10-06
+----------------------
+NEW FEATURES:
+- Favorite order total is back
+- Total number of items is now shown
+- Added some extra markup for easy theming
+- Put menu page callbacks in own file
+- Check if node exists before showing it on the list
+
+BUG FIXES:
+- Invoke hook_cart_item() with $op = 'load' before loading products. Fixes price
+  not being shown correctly on the "favorite order" page.
+- Call drupal_alter('uc_cart', $items) to allow other modules a chance to alter
+  the fully loaded cart object
+
+OTHER:
+- Changed the description for the "clear cart's content" checkbox
+
+Favorite Order 6.x-1.0-ALPHA4, 2010-10-03
+----------------------
+- In uc_favorder_load_favorder_submit make proper use of
+  $form_state['values']['clear']
+- Backport from 7.x-1.0-dev: Emulate uc_cart way of loading the cart items
+  from db
+- Change the way the favorite order is themed, implement
+  theme(uc_cart_block_items, $items)
