@@ -324,11 +324,52 @@ function uc_reports_products_custom() {
     );
   }
   else {
-    $args = array(
-      'start_date' => arg(5),
-      'end_date' => arg(6),
-      'status' => explode(',', urldecode(arg(7))),
-    );
+    if(arg(8) == '') {
+      $args = array(
+        'start_date' => arg(5),
+        'end_date' => arg(6),
+        'status' => explode(',', urldecode(arg(7))),
+        'title' => '',
+        'customer' => ''
+      );
+    } else {
+      $parts = explode('|', arg(8));
+      $args = array(
+        'start_date' => arg(5),
+        'end_date' => arg(6),
+        'status' => explode(',', urldecode(arg(7))),
+        'model' => $parts[0],
+        'title' => $parts[1],
+        'customer' => $parts[2]
+      );
+    }
+  }
+
+  if($args['title']) {
+    $sql_search = " AND LOWER(n.title) LIKE LOWER('%%".db_escape_string($args['title'])."%%') ";
+  } else {
+    $sql_search = '';
+  }
+
+  if($args['model']) {
+    $model_search = " AND LOWER(ucp.model) LIKE LOWER('".db_escape_string($args['model'])."%%') ";
+    $model_join = " LEFT JOIN {uc_products} ucp ON n.nid = ucp.nid ";
+  } else {
+    $model_search = '';
+    $model_join = '';
+  }
+
+  if($args['customer']) {
+    $cust_search = " AND n.nid IN (SELECT cp.nid FROM {uc_order_products} cp INNER JOIN {uc_orders} co ON cp.order_id = co.order_id INNER JOIN {users} cu ON cu.uid = co.uid WHERE LOWER(cu.name) LIKE LOWER('".db_escape_string($args['customer'])."%%')) ";
+    $cust_ucp_search_base = " (SELECT cp.order_product_id FROM {uc_order_products} cp INNER JOIN {uc_orders} co ON cp.order_id = co.order_id INNER JOIN {users} cu ON cu.uid = co.uid WHERE LOWER(cu.name) LIKE LOWER('".db_escape_string($args['customer'])."%%')) ";
+    $cust_ucp_search_p = " AND p.order_product_id IN ".$cust_ucp_search_base;
+    $cust_ucp_search_p2 = " AND p2.order_product_id IN ".$cust_ucp_search_base;
+    $cust_ucp_search_p3 = " AND p3.order_product_id IN ".$cust_ucp_search_base;
+  } else {
+    $cust_search = '';
+    $cust_ucp_search_p = '';
+    $cust_ucp_search_p2 = '';
+    $cust_ucp_search_p3 = '';
   }
 
   // Pull the order statuses into a SQL friendly array.
@@ -355,7 +396,10 @@ function uc_reports_products_custom() {
     switch ($GLOBALS['db_type']) {
       case 'mysqli':
       case 'mysql':
-        $sql = "SELECT n.nid, n.title, c.totalcount, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition) AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition) AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition) AS gross FROM {node} AS n LEFT JOIN {node_counter} AS c ON n.nid = c.nid WHERE type IN (". implode(", ", $product_types) .") GROUP BY n.nid DESC";
+        $sql = 
+        "SELECT n.nid, n.title, c.totalcount, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition ".$cust_ucp_search_p.") AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition ".$cust_ucp_search_p2.") AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition ".$cust_ucp_search_p3.") AS gross FROM {node} AS n LEFT JOIN {node_counter} AS c ON n.nid = c.nid
+          ".$model_join."
+          WHERE type IN (". implode(", ", $product_types) .") ".$sql_search.$cust_search.$model_search." GROUP BY n.nid DESC";
         break;
       case 'pgsql':
         $sql = "SELECT n.nid, n.title, c.totalcount, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition) AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition) AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition) AS gross FROM {node} AS n LEFT JOIN {node_counter} AS c ON n.nid = c.nid WHERE type IN (". implode(", ", $product_types) .") GROUP BY n.nid";
@@ -376,7 +420,9 @@ function uc_reports_products_custom() {
     switch ($GLOBALS['db_type']) {
       case 'mysqli':
       case 'mysql':
-        $sql = "SELECT n.nid, n.title, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition) AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition) AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition) AS gross FROM {node} AS n WHERE type IN (". implode(', ', $product_types) .') GROUP BY n.nid DESC';
+        $sql = "SELECT n.nid, n.title, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition ".$cust_ucp_search_p.") AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition ".$cust_ucp_search_p2.") AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition ".$cust_ucp_search_p3.") AS gross FROM {node} AS n
+          ".$model_join."
+          WHERE type IN (". implode(', ', $product_types).') '.$sql_search.$cust_search.$model_search.' GROUP BY n.nid DESC';
         break;
       case 'pgsql':
         $sql = "SELECT n.nid, n.title, (SELECT SUM(qty) FROM {uc_order_products} AS p LEFT JOIN {uc_orders} AS o ON p.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p.nid = n.nid AND $time_condition) AS sold, (SELECT (SUM(p2.price * p2.qty)) FROM {uc_order_products} AS p2 LEFT JOIN {uc_orders} AS o ON p2.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p2.nid = n.nid AND $time_condition) AS revenue, (SELECT (SUM(p3.price * p3.qty) - SUM(p3.cost * p3.qty)) FROM {uc_order_products} AS p3 LEFT JOIN {uc_orders} AS o ON p3.order_id = o.order_id WHERE o.order_status IN $order_statuses AND p3.nid = n.nid AND $time_condition) AS gross FROM {node} AS n WHERE type IN (". implode(', ', $product_types) .') GROUP BY n.nid, n.title';
@@ -384,7 +430,7 @@ function uc_reports_products_custom() {
     }
   }
 
-  $sql_count = "SELECT COUNT(nid) FROM {node} WHERE type IN (". implode(", ", $product_types) .")";
+  $sql_count = "SELECT COUNT(n.nid) FROM {node} n ".$model_join." WHERE type IN (". implode(", ", $product_types) .") ".$sql_search.$cust_search.$model_search;
   $products = pager_query($sql . tablesort_sql($header), $page_size, 0, $sql_count);
 
   $rows = array();
@@ -458,7 +504,7 @@ function uc_reports_products_custom() {
   // Build the page output holding the form, table, and CSV export link.
   $output = drupal_get_form('uc_reports_products_custom_form', $args, $args['status']);
   $output .= theme('table', $header, $rows, array('width' => '100%', 'class' => 'uc-sales-table'));
-  $output .= '<div class="uc-reports-links">'. l(t('Export to CSV file.'), 'admin/store/reports/getcsv/'. $csv_data['report'] .'/'. $csv_data['user']) .'&nbsp;&nbsp;&nbsp;'. (isset($_GET['nopage']) ? l(t('Show paged records'), 'admin/store/reports/products/custom') : l(t('Show all records'), 'admin/store/reports/products/custom', array('query' => 'nopage=1'))) .'</div>';
+  $output .= '<div class="uc-reports-links">'. l(t('Export to CSV file.'), 'admin/store/reports/getcsv/'. $csv_data['report'] .'/'. $csv_data['user']) .'&nbsp;&nbsp;&nbsp;'. (isset($_GET['nopage']) ? l(t('Show paged records'), 'admin/store/reports/products/custom') : l(t('Show all records'), $_GET['q'], array('query' => 'nopage=1'))) .'</div>';
   $output .= theme('pager', NULL, $page_size);
   $output .= '<small>*'. t('Make sure %setting_name is set to %state in the <a href="!url">access log settings page</a> to enable views column.', array('%setting_name' => 'count content views', '%state' => 'enabled', '!url' => url('admin/reports/settings', array('query' => 'destination=admin/store/reports/products/custom')))) .'</small>';
 
@@ -475,6 +521,26 @@ function uc_reports_products_custom_form(&$form_state, $values, $statuses) {
     '#description' => t('Adjust these values and update the report to build your custom product report. Once submitted, the report may be bookmarked for easy reference in the future.'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
+  );
+
+  $parts = explode('|', arg(8));
+
+  $form['search']['carton_barcode'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Carton Barcode'),
+    '#default_value' => $parts[0]
+  );
+
+  $form['search']['product_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Product Name'),
+    '#default_value' => $parts[1]
+  );
+
+  $form['search']['customer_account'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Account #'),
+    '#default_value' => $parts[2]
   );
 
   $form['search']['start_date'] = array(
@@ -540,6 +606,7 @@ function uc_reports_products_custom_form_submit($form, &$form_state) {
     $start_date,
     $end_date,
     urlencode(implode(',', array_keys($form_state['values']['status']))),
+    $form_state['values']['carton_barcode'].'|'.$form_state['values']['product_title'].'|'.$form_state['values']['customer_account']
   );
 
   $form_state['redirect'] = array('admin/store/reports/products/custom/'. implode('/', $args));
