@@ -1,0 +1,186 @@
+<?php
+// $Id: uc_reorder.module,v 1.13 2009/12/07 06:27:25 tr Exp $
+
+/**
+ * @file
+ * Module to provide a "reorder" button on the order history page
+ *
+ * The "reorder" button will add all the items from a previously-placed
+ * order into the customer's shopping cart.  Items already in the cart
+ * are not affected.  Attributes of products in previous order are preserved.
+ *
+ * @author Tim Rohaly.    <http://drupal.org/user/202830>
+ * @version $Id: uc_reorder.module,v 1.13 2009/12/07 06:27:25 tr Exp $
+ */
+
+
+/**
+ * Implementation of hook_menu().
+ *
+ * Registers _uc_reorder_reorder() callback for reorder button.
+ *
+ * @return
+ *   An array with the menu path, callback, and parameters.
+ */
+function uc_reorder_menu() {
+  global $user;
+  $items = array();
+
+  if ($user->uid) {  // no order info page for anonymous users
+    $items['user/%/reorder/%'] = array(
+      'title'           => 'Re-Order Button',
+      'page callback'   => '_uc_reorder_reorder',
+      'page arguments'  => array(1, 3),
+      'access callback' => TRUE,  //  NEED TO SET THIS PROPERLY!
+      'type'            => MENU_CALLBACK,
+    );
+    // element 'access' is deliberately not set - that makes this menu
+    // inherit permissions, so anyone who can view user/#
+    // can reorder from this menu
+  }
+
+  return $items;
+}
+
+
+/**
+ * Implementation of hook_menu_alter().
+ */
+function uc_reorder_menu_alter(&$items) {
+  global $user;
+
+  // Modify user/#/orders menu to callback to uc_reorder_order_history()
+  // instead of uc_order_history().  Allows us to modify core behavior
+  // without hacking uc_order.module.
+  if ($user->uid) {  // no order info page for anonymous users
+    $items['user/%user/orders']['page callback'] = 'uc_reorder_order_history';
+  }
+}
+
+
+/*******************************************************************************
+ * Overrides of Ubercart core
+ ******************************************************************************/
+
+
+/**
+ * Iterates over all items in a previously created order and adds them
+ * to the current cart.
+ *
+ * @param $order
+ *   Order number
+ */
+function _uc_reorder_reorder($uid, $order_id) {
+
+  // Check to see if the user has permission to see this order
+  $order_uid = db_result(db_query("SELECT uid FROM {uc_orders} WHERE order_id = %d", $order_id));
+  if (!user_access('view all orders') && $order_uid != $uid) {
+    drupal_goto('user/'. $uid .'/orders');
+  }
+
+  //  Loop over all products in the specified Order
+  $result = db_query("SELECT nid, qty, data FROM {uc_order_products} WHERE order_id = %d", $order_id);
+
+  while ($product = db_fetch_object($result)) {
+    $product->data = unserialize($product->data);
+
+    // First extract the 'attributes' sub-array, save it
+    $str_attributes = $product->data['attributes'];
+    // Then delete the attributes sub-array
+    $product->data['attributes'] = array();
+
+    // Loop over all string attributes to find corresponding *numerical*
+    // attribute so we can rebuild attributes sub-array in the form needed
+    // by uc_cart_add_item
+    foreach ($str_attributes as $attribute => $option_array) {
+      // aid is a unique primary key
+      $attribute_id = db_result(db_query("SELECT aid FROM {uc_attributes} WHERE name = '%s'", $attribute));
+      foreach ($option_array as $option) {
+        // oid is a unique primary key
+        $option_id = db_result(db_query("SELECT oid FROM {uc_attribute_options} WHERE aid = %d AND name = '%s'", $attribute_id, $option));
+        if ($option_id) {
+          // Select, Radio, or Checkbox attribute
+          $product->data['attributes'][$attribute_id][] = $option_id;
+        }
+        else {
+          // Textfield attribute - sanitize user input
+          $product->data['attributes'][$attribute_id] = check_plain($option);
+        }
+      }
+    }
+
+    uc_cart_add_item($product->nid, $product->qty, $product->data, $uid, TRUE, FALSE);
+  }
+
+  // Redirect to cart, so user can see result of re-order action
+  drupal_goto('cart');
+}
+
+
+/**
+ * Modified version of uc_order_history, changed to add reorder
+ * button in its own column into the table of orders
+ *
+ * Returns the sortable table listing of a customer's orders.
+ *
+ * @param $user
+ *   The user ID whose orders you wish to list.
+ */
+function uc_reorder_order_history($user) {
+  drupal_set_title(t('My order history'));
+
+  $header = array(
+    array('data' => t('Date'), 'field' => 'o.created', 'sort' => 'desc'),
+    array('data' => t('Order #'), 'field' => 'o.order_id'),
+    array('data' => t('Status'), 'field' => 'os.title'),
+    array('data' => t('Products'), 'field' => 'products'),
+    array('data' => t('Total'), 'field' => 'o.order_total'),
+    array('data' => t('Re-Order')),
+  );
+
+  $result = pager_query("SELECT o.order_id, o.created, os.title, SUM(op.qty) AS products, o.order_total AS total FROM {uc_orders} AS o LEFT JOIN {uc_order_statuses} AS os ON o.order_status = os.order_status_id LEFT JOIN {uc_order_products} AS op ON o.order_id = op.order_id WHERE o.uid = %d AND o.order_status IN ". uc_order_status_list('general', TRUE) ." GROUP BY o.order_id, o.created, os.title, o.order_total". tablesort_sql($header), 20, 0, "SELECT COUNT(*) FROM {uc_orders} WHERE uid = %d AND order_status NOT IN ". uc_order_status_list('specific', TRUE), $user->uid);
+  $context = array(
+    'revision' => 'themed-original',
+    'type'     => 'amount',
+  );
+  // Build a table based on the customer's orders.
+  while ($order = db_fetch_object($result)) {
+    $context['subject'] = array('order' => $order);
+    $link = l($order->order_id, 'user/'. $user->uid .'/order/'. $order->order_id);
+    if (user_access('view all orders')) {
+      $link .= '<span class="order-admin-icons">'. uc_order_actions($order, TRUE) .'</span>';
+    }
+    $rows[] = array(
+      array('data' => format_date($order->created, 'custom', variable_get('uc_date_format_default', 'm/d/Y'))),
+      array('data' => $link, 'nowrap' => 'nowrap'),
+      array('data' => $order->title),
+      array('data' => (!is_null($order->products) ? $order->products : 0), 'align' => 'center'),
+      array('data' => uc_price($order->total, $context), 'align' => 'right'),
+      array('data' => drupal_get_form('uc_reorder_reorder_form', 'user/'. $user->uid .'/reorder/'. $order->order_id)),
+    );
+  }
+
+  $output = theme('table', $header, $rows, array('class' => 'uc-order-history')) . theme('pager', NULL, 20, 0);
+  $output .= t("The Re-Order button will add all the items from a previously-placed order into your shopping cart.  Items already in your cart will not be affected.");
+  return $output;
+}
+
+
+/**
+ * Reorder form - consists of just the reorder button
+ *
+ * @param $form_state
+ *   Drupal FormAPI state array
+ *
+ * @param $href
+ *   Callback URL
+ */
+function uc_reorder_reorder_form($form_state, $href) {
+  $form['reorder'] = array(
+    '#type'  => 'button',
+    '#value' => t('Re-Order'),
+  );
+  $form['#action'] = url($href);
+
+  return $form;
+}

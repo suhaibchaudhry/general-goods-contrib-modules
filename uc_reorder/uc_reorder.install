@@ -1,0 +1,38 @@
+<?php
+// $Id: uc_reorder.install,v 1.4 2009/12/07 06:27:59 tr Exp $
+
+/**
+ * @file
+ * Module to provide a "reorder" button on the order history page
+ *
+ * @author Tim Rohaly.    <http://drupal.org/user/202830>
+ * @version $Id: uc_reorder.install,v 1.4 2009/12/07 06:27:59 tr Exp $
+ */
+
+
+/**
+ * Implementation of hook_install().
+ *
+ * Creates database tables needed by this module.
+ */
+function uc_reorder_install() {
+  // Because we are redefining the uc_order menu user/#/orders,
+  // we need to ensure this module gets loaded AFTER uc_order
+  $sql = "SELECT weight FROM {system} WHERE name = 'uc_order'";
+  $weight_order = (int) db_result(db_query($sql));
+  $sql = "UPDATE {system} SET weight = %d WHERE name = 'uc_reorder'";
+  db_query($sql, $weight_order+1);
+}
+
+
+/**
+ * Implementation of hook_uninstall().
+ *
+ * Removes all tables and variables inserted into the
+ * database by this module.
+ */
+function uc_reorder_uninstall() {
+
+  /* Remove all module tables from the database */
+  /* Remove all module variables from the database */
+}
