@@ -130,24 +130,50 @@ function weight_old_nodes($weight_node_types = array()) {
     $temp->node_weight = variable_get('weight_default', 0);
     drupal_set_message(t('Enabling weight for: !types, default weight: !default',
       array('!types' => implode(', ', $weight_node_types), '!default' => $temp->node_weight)));
-    // Get default for non-sticky nodes;
-    $temp->sticky = 0;
-    _weight_encode($temp);
-    $not_sticky = $temp->sticky;
-    // Get default for sticky nodes;
-    $temp->sticky = 1;
-    _weight_encode($temp);
-    $is_sticky = $temp->sticky;
+
     $placeholders = db_placeholders($weight_node_types, 'text');
 
-    array_unshift($weight_node_types, $is_sticky);
-    db_query("UPDATE {node} SET sticky = %d WHERE sticky = 1 AND type IN ($placeholders)", $weight_node_types);
-    $count = db_affected_rows();
-    array_shift($weight_node_types);
-    array_unshift($weight_node_types, $not_sticky);
-    db_query("UPDATE {node} SET sticky = %d WHERE sticky = 0 AND type IN ($placeholders)", $weight_node_types);
-    $count += db_affected_rows();
-    drupal_set_message(t('@count nodes weight enabled.', array('@count' => $count)));
+    if (variable_get('weight_use_menu', 0)) {
+      $result = db_query("SELECT nid FROM {node} WHERE sticky = 1 AND type IN ($placeholders)", $weight_node_types);
+      $count = db_affected_rows();
+      while ($row = db_fetch_object($result)) {
+        $weight = db_result(db_query("SELECT weight FROM {menu_links} WHERE link_path = '%s'", 'node/' . $row->nid));
+        $temp->node_weight = $weight;
+        $temp->sticky = 1;
+        _weight_encode($temp);
+        db_query("UPDATE {node} SET sticky = %d WHERE sticky = 1 AND nid = %d", array($temp->sticky, $row->nid));
+      }
+
+      $result = db_query("SELECT nid FROM {node} WHERE sticky = 0 AND type IN ($placeholders)", $weight_node_types);
+      $count = db_affected_rows();
+      while ($row = db_fetch_object($result)) {
+        $weight = db_result(db_query("SELECT weight FROM {menu_links} WHERE link_path = '%s'", 'node/' . $row->nid));
+        $temp->node_weight = $weight;
+        $temp->sticky = 0;
+        _weight_encode($temp);
+        dpm($temp->sticky);
+        db_query("UPDATE {node} SET sticky = %d WHERE sticky = 0 AND nid = %d", array($temp->sticky, $row->nid));
+      }
+    }
+    else {
+      // Get default for non-sticky nodes;
+      $temp->sticky = 0;
+      _weight_encode($temp);
+      $not_sticky = $temp->sticky;
+      // Get default for sticky nodes;
+      $temp->sticky = 1;
+      _weight_encode($temp);
+      $is_sticky = $temp->sticky;
+
+      array_unshift($weight_node_types, $is_sticky);
+      db_query("UPDATE {node} SET sticky = %d WHERE sticky = 1 AND type IN ($placeholders)", $weight_node_types);
+      $count = db_affected_rows();
+      array_shift($weight_node_types);
+      array_unshift($weight_node_types, $not_sticky);
+      db_query("UPDATE {node} SET sticky = %d WHERE sticky = 0 AND type IN ($placeholders)", $weight_node_types);
+      $count += db_affected_rows();
+      drupal_set_message(t('@count nodes weight enabled.', array('@count' => $count)));
+    }
   }
 }
 

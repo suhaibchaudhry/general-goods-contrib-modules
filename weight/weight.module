@@ -253,7 +253,7 @@ function weight_form_node_admin_content_alter(&$form, $form_state) {
           'event' => 'change',
         )
       );
-      $status = $node->status ? t('published') : NULL;
+      $status = $node->status ? t('published') : t('not published');
       $status .= $node->sticky ? '<br />'. t('sticky') : NULL;
       $status .= $node->promote ? '<br />'. t('promoted') : NULL;
       $status .= $node->translate ? '<br />'. t('translate') : NULL;
@@ -311,16 +311,23 @@ function weight_view_weight_form($form_state, $view, $renders) {
   foreach ($renders as $num => $result) {
     foreach ($result as $field => $value) {
       if ($field == 'weight') {
-        $form['rows'][$num][$field] = array(
-          '#type' => 'weight',
-          '#delta' => variable_get('weight_range', 20),
-          '#default_value' => $value,
-        );
+        if (user_access('assign node weight')) {
+          $form['rows'][$num][$field] = array(
+            '#type' => 'weight',
+            '#delta' => variable_get('weight_range', 20),
+            '#default_value' => $value,
+          );
+        }
+        else {
+          $form['rows'][$num][$field] = array(
+            '#value' => $value,
+          );
+        }
       }
       else {
         $form['rows'][$num][$field] = array(
           '#type' => 'markup',
-          '#value' => filter_xss($value),
+          '#value' => $value,
         );
       }
     }
@@ -356,7 +363,10 @@ function weight_view_weight_form($form_state, $view, $renders) {
   );
 
   $form['#theme'] = 'weight_view_weight';
-  $form['#submit'][] = 'weight_view_weight_form_submit';
+
+  if (user_access('assign node weight')) {
+    $form['#submit'][] = 'weight_view_weight_form_submit';
+  }
 
   return $form;
 }
@@ -377,8 +387,25 @@ function weight_view_weight_form_submit($form, &$form_state) {
       $node->sticky = (-1 * $weight) - 100;
     }
     db_query("UPDATE {node} SET sticky = %d WHERE nid = %d", $node->sticky, $nid);
+
+    if (module_exists('i18nsync') && in_array('sticky', i18nsync_node_fields($node->type))) {
+      $nodes = translation_node_get_translations($node->tnid);
+      if (count($nodes)) {
+        foreach ($nodes as $tnode) {
+          if ($tnode->nid != $node->nid) {
+            db_query("UPDATE {node} SET sticky = %d WHERE nid = %d", $node->sticky, $tnode->nid);
+          }
+        }
+        $synced = TRUE;
+      }
+    }
   }
-  drupal_set_message(t('Your weight changes have been saved.'));
+  if ($synced) {
+    drupal_set_message(t('Your weight changes have been saved and synchronized.'));
+  }
+  else {
+    drupal_set_message(t('Your weight changes have been saved.'));
+  }
 }
 
 /**
